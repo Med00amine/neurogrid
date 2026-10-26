@@ -79,7 +79,7 @@ class Worker:
 
 def _register_periodic() -> None:
     # imported here so the modules can use @periodic without import cycles
-    for mod in ("app.services.sending.engine", "app.services.replies.jobs", "app.services.pipeline_service"):
+    for mod in ("app.services.sending.engine", "app.services.replies.jobs", "app.services.pipeline_service", "app.services.retention"):
         try:
             __import__(mod)
         except ModuleNotFoundError as e:

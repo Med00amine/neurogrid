@@ -62,3 +62,39 @@ def put_group(group: str, body: dict, db: Session = Depends(get_db), auth: Auth 
     # live-mode switch changes are always audited
     audit(db, f"settings.{group}", actor=auth.label, entity_type="settings", entity_id=group, details={"changed_keys": sorted(changed)})
     return new.model_dump()
+
+
+@router.post("/settings/test-llm")
+def test_llm(db: Session = Depends(get_db), auth: Auth = Depends(write_access)):
+    """One tiny real call (a few hundred tokens, a fraction of a cent) to prove the key and model work."""
+    from app.services import llm as llm_mod
+
+    client = llm_mod.get_llm(db)
+    if client is None:
+        raise HTTPException(409, "No AI key is configured (ANTHROPIC_API_KEY in .env) or the LLM provider is set to 'none'. Template drafting still works.")
+    cfg = get_group(db, "llm")
+    schema = {"type": "object", "additionalProperties": False, "required": ["ok"], "properties": {"ok": {"type": "boolean"}}}
+    try:
+        res = llm_mod.call_llm(db, client, model=cfg.research_model, system="Reply with the JSON object {\"ok\": true}.", user="ping",
+                               schema=schema, purpose="connection_test", max_tokens=200, effort="low")
+    except llm_mod.LLMError as e:
+        return {"ok": False, "error": str(e), "category": e.category}
+    return {"ok": True, "model": res.model, "input_tokens": res.input_tokens, "output_tokens": res.output_tokens, "cost_usd_est": float(res.cost_usd)}
+
+
+@router.post("/settings/test-search")
+def test_search(db: Session = Depends(get_db), auth: Auth = Depends(write_access)):
+    from app.services import llm as llm_mod
+    from app.services.research import search
+
+    provider = get_group(db, "research").search_provider
+    client = search.get_search(provider) if provider != "none" else None
+    if client is None:
+        raise HTTPException(409, "Search is switched off or has no key (TAVILY_API_KEY in .env). Website-only research still works.")
+    try:
+        hits, credits = client.search("example domain", max_results=1)
+    except llm_mod.LLMError as e:
+        return {"ok": False, "error": str(e), "category": e.category}
+    cost = pricing.search_cost(provider, credits)
+    llm_mod.record_usage(db, provider=provider, kind="search", purpose="connection_test", units=credits, cost=cost)
+    return {"ok": True, "results": len(hits), "credits": credits, "cost_usd_est": float(cost)}

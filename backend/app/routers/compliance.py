@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from typing import Literal
 
+import csv
+import io
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.constants import JURISDICTION_RULES, SUPPRESSION_REASONS
 from app.core.deps import Auth, read_access, write_access
+from app.core.text import csv_safe
 from app.db import get_db
 from app.models import AuditLog, Contact, JurisdictionPolicy, OutreachEvent, Suppression
 from app.services import jurisdictions, suppression
@@ -159,3 +164,27 @@ def audit_log(action: str | None = None, page: int = Query(1, ge=1), page_size: 
     rows = db.execute(stmt.order_by(AuditLog.id.desc()).limit(page_size).offset((page - 1) * page_size)).scalars().all()
     return [{"id": a.id, "at": a.at.isoformat(), "actor": a.actor_label, "action": a.action, "entity_type": a.entity_type,
              "entity_id": a.entity_id, "details": a.details} for a in rows]
+
+
+@router.get("/suppressions-export")
+def export_suppressions(db: Session = Depends(get_db), auth: Auth = Depends(read_access)):
+    if not auth.is_admin:
+        raise HTTPException(403, "Exporting personal data needs the admin role")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["kind", "value", "reason", "source", "active", "created_at", "created_by"])
+    for s in db.execute(select(Suppression).order_by(Suppression.id)).scalars():
+        w.writerow([csv_safe(x) for x in (s.kind, s.value, s.reason, s.source, "yes" if s.active else "no", s.created_at.isoformat(), s.created_by)])
+    return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="suppressions.csv"'})
+
+
+@router.get("/events-export")
+def export_events(db: Session = Depends(get_db), auth: Auth = Depends(read_access)):
+    if not auth.is_admin:
+        raise HTTPException(403, "Exporting personal data needs the admin role")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id", "at", "type", "contact_id", "message_id", "campaign_id", "source", "actor"])
+    for e in db.execute(select(OutreachEvent).order_by(OutreachEvent.id).limit(200000)).scalars():
+        w.writerow([csv_safe(x) for x in (e.id, e.occurred_at.isoformat(), e.event_type, e.contact_id, e.message_id, e.campaign_id, e.source, e.actor)])
+    return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="outreach_events.csv"'})
