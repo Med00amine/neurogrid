@@ -127,6 +127,8 @@ class LLMSettings(_Base):
     research_model: str = DEFAULT_RESEARCH_MODEL
     draft_model: str = DEFAULT_DRAFT_MODEL
     effort: Literal["low", "medium", "high"] = "low"
+    # Ask the model for a SUGGESTED label on replies the rules cannot classify. Reply text is sent to the provider.
+    classify_replies: bool = False
 
     @field_validator("research_model", "draft_model")
     @classmethod
