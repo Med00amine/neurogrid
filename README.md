@@ -1,81 +1,76 @@
 # Client Acquisition Studio
 
-A private workspace for finding, researching and carefully contacting B2B prospects for freelance AI / Python / AWS work.
-It is built so that **a mistake costs you nothing**: nothing is emailed until you deliberately turn real sending on, nobody can
-be emailed twice, and nobody who opts out can be contacted again.
+A private workspace for finding, researching and carefully contacting B2B prospects as a freelance AI / Python / AWS engineer.
+You review everything. Nothing is emailed until you deliberately turn real sending on.
+
+![Overview](docs/images/overview.png)
+
+## How it works
 
 ```
-contacts file ──► import (preview + mapping) ──► review & compliance gates ──► company research (with sources)
-      ──► explainable lead score ──► evidence-linked draft ──► YOU approve the exact text ──► campaign (dry run first)
-      ──► careful sending (caps, windows, re-checks) ──► replies / bounces / unsubscribes ──► sales pipeline
+import contacts → review & compliance gates → research the company (with sources)
+   → score the lead → draft from approved facts → you approve the exact text
+   → dry-run campaign first → careful sending → replies, bounces, opt-outs → pipeline
 ```
 
-## Start it (about 5 minutes)
+| Research with sources | Draft built from approved facts |
+|---|---|
+| ![Research](docs/images/research.png) | ![Draft](docs/images/draft.png) |
 
-You need Docker (Docker Desktop, or Docker Engine with the Compose plugin).
+![Dry run](docs/images/dry-run.png)
+
+*Screenshots use synthetic test data. The campaign above is a dry run: nothing was sent.*
+
+## What it does
+
+- **Contacts:** import `.xlsx` / `.csv` with preview and column mapping; duplicates and bad addresses are handled.
+- **Research:** reads each company's own website; every finding has an exact quote and source link, and you approve it.
+- **Email studio:** drafts use only approved facts and your own profile. Approval is tied to the exact text.
+- **Campaigns:** typed confirmation, daily and hourly caps, sending windows, pause and cancel.
+- **Replies:** reads your inbox (read-only), sorts replies, handles bounces, and honours opt-outs immediately.
+- **Pipeline and jobs:** leads, tasks and deals; background jobs that survive restarts.
+
+## Safe by design
+
+- Nobody gets the same email twice. This is enforced inside PostgreSQL, not just in code.
+- Anyone who opts out or bounces can never be emailed again.
+- Real sending needs three separate switches plus a typed confirmation per campaign.
+- Secrets live in `.env` only. The UI shows whether they are set, never the values.
+
+## Start it
+
+Needs Docker.
 
 ```bash
-./scripts/setup.sh                 # creates .env with generated passwords; prints your sign-in once
-docker compose up -d --build       # database + app + background worker
+./scripts/setup.sh                 # creates .env with generated passwords
+docker compose up -d --build
 ```
 
-Open **http://localhost:8000** and sign in. Real email is **off**. The top bar says *“Safe mode: dry-run only”*.
+Open http://localhost:8000 and sign in with the password the script printed.
+First-day walkthrough: [docs/04-setup-and-operations.md](docs/04-setup-and-operations.md).
 
-Step-by-step guide for your first day (import → research → review a draft → dry-run campaign): **[docs/04-setup-and-operations.md](docs/04-setup-and-operations.md)**.
+## Good to know
 
-## What is in the box
+- Real providers (SMTP, IMAP, AI, search) have not been tested live. Start with a handful of emails.
+- "Sent" means your mail server accepted the message, not that it was delivered.
+- Cold email is restricted in many countries. The built-in country rules are a starting point, not legal advice.
+- Contact files hold personal data. `data/`, `backups/` and `.env` are git-ignored; never commit them.
 
-| Page | What it does |
-|---|---|
-| **Overview** | Real counts from the database, each labelled *database / estimate / simulated / mail-system confirmed*. Getting-started checklist. |
-| **Contacts** | Import `.xlsx`/`.csv` with preview and column mapping. Search, filter, bulk actions with audited reasons. |
-| **Company research** | Reads each company's own website (robots.txt respected), optional web search. Every finding has an exact quote, source link and retrieval time. You approve, edit or reject. |
-| **Leads & scoring** | 0-100 evidence score with its parts and the evidence behind each. Configurable segments. Not a sales prediction. |
-| **Email studio** | Drafts where each claim points to approved research or your own profile. Warnings, blockers, cost, version history. Approval is bound to the exact text. |
-| **Campaigns** | Preview recipients and *why* others are excluded. Dry run or live. Typed confirmation. Pause / resume / cancel. Queue with per-message history. |
-| **Replies** | Replies, bounces, out-of-office from your mailbox (read-only). Suggested label you can correct. Opt-outs act immediately. |
-| **Sales pipeline** | Drag-and-drop board, tasks and follow-ups (which stop by themselves on reply / unsubscribe / bounce), deals. |
-| **Job monitor** | Background jobs with progress, errors, safe retry and cancel. Survives restarts. |
-| **Settings** | Sender identity, limits, AI/research providers, budgets, country rules, suppression list, retention, credential *status* (never values). |
+## Docs
 
-## How duplicates and unlawful sends are prevented (not just discouraged)
-
-Enforced inside PostgreSQL, so even a bug in the application cannot bypass it: one live message per contact per sequence step across all
-campaigns (partial unique index); an illegal status change (e.g. `unknown` → `queued`) is rejected by a trigger; a message to a suppressed address is
-rejected by a trigger; history tables are append-only; suppressions can never be deleted. Details: [docs/02](docs/02-architecture-decision-record.md).
-
-## Important honesty notes
-
-* **Your contact file has no job titles, countries or send history**, and nothing in the folder records who was emailed before. So every contact starts as
-  *history unknown* and *country unknown* and is blocked from sending until you resolve both. That is deliberate.
-* **Most contacts are in countries where cold B2B email is restricted** (Germany, Austria, Italy, Spain, Switzerland and others generally need prior consent). See *Settings → Privacy & compliance*. This app reduces the risk; it cannot make a purchased/scraped list lawful. Consider a lawyer before the first live batch.
-* **“Submitted” is not “delivered”.** With plain SMTP the only confirmed fact is that your mail server accepted the message.
-* **Personal data.** `data/` and `backups/` are git-ignored. Never push them to GitHub.
-
-## Everyday commands
-
-| | |
-|---|---|
-| `make up` / `make down` / `make logs` | start / stop / watch the app |
-| `make backup` / `make restore FILE=…` | back up / restore (read [docs/05](docs/05-backup-and-recovery.md) first) |
-| `make admin EMAIL=you@example.com` | add a user |
-| `make doctor` | configuration checklist (never prints secrets) |
-| `make test` | all tests (needs `make db`, see below) |
+[Audit and research](docs/01-audit-and-research-report.md) ·
+[Architecture](docs/02-architecture-decision-record.md) ·
+[Setup and operations](docs/04-setup-and-operations.md) ·
+[Backup](docs/05-backup-and-recovery.md) ·
+[Deployment](docs/06-deployment-guide.md) ·
+[Costs](docs/07-cost-estimate.md) ·
+[Security](docs/09-security-review.md)
 
 ## Development
 
 ```bash
-docker compose up -d db                                   # PostgreSQL on 127.0.0.1:55432
+docker compose up -d db
 cd backend && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt
-alembic upgrade head && python -m pytest                  # 200+ tests, each in its own throw-away database
-cd ../frontend && npm ci && npm test && npm run build     # unit tests, then the UI bundle FastAPI serves
-npx playwright install chromium && npx playwright test    # browser acceptance tests (dry-run, synthetic data)
-docker compose --profile test up -d greenmail             # optional: real IMAP+SMTP test server for 5 extra tests
+alembic upgrade head && python -m pytest
+cd ../frontend && npm ci && npm test && npx playwright test
 ```
-
-## Documents
-
-1. [Audit and research report](docs/01-audit-and-research-report.md): what was in the folder, providers compared with sources and dates, legal landscape
-2. [Architecture decision record](docs/02-architecture-decision-record.md) · 3. [Implementation checklist](docs/03-implementation-checklist.md)
-4. [Setup and operations guide](docs/04-setup-and-operations.md) · 5. [Backup and recovery](docs/05-backup-and-recovery.md) · 6. [Deployment](docs/06-deployment-guide.md)
-7. [Cost estimate](docs/07-cost-estimate.md) · 8. [Final report](docs/08-final-report.md) · 9. [Security review](docs/09-security-review.md)
