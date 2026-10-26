@@ -1,0 +1,23 @@
+# Development stack: only the database is started by default (`make db`).
+# The full stack (api + worker) is added in the production profile later in this file.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-neurogrid}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neurogrid_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-neurogrid}
+    ports:
+      # bound to localhost only; never expose the database publicly
+      - "127.0.0.1:${DB_HOST_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
