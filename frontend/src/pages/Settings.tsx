@@ -249,7 +249,7 @@ function Compliance({ s }: { s: any }) {
           <button className="btn" onClick={() => download("/api/suppressions-export", "suppressions.csv").catch((e) => toast.error(e.message))}><Icon name="download" size={14} />Suppression list</button>
           <button className="btn" onClick={() => download("/api/events-export", "outreach_events.csv").catch((e) => toast.error(e.message))}><Icon name="download" size={14} />Outreach event history</button>
         </div>
-        <p className="xs muted mt-8">For a full database backup see docs/05-backup-and-recovery.md.</p>
+        <p className="xs muted mt-8">For a full database backup run `make backup`.</p>
       </Card>}
       {admin && <AuditLog />}
     </div>

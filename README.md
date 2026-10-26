@@ -3,29 +3,37 @@
 A private workspace for finding, researching and carefully contacting B2B prospects as a freelance AI / Python / AWS engineer.
 You review everything. Nothing is emailed until you deliberately turn real sending on.
 
-![Overview](docs/images/overview.png)
+![Overview](assets/overview.png)
+
+## AI that searches and analyses
+
+- **Search:** finds a company's official pages and recent signals, such as a hiring post, through web search.
+- **Analysis:** an AI model reads those pages and pulls out facts, each with an exact quote that the app verifies against the page.
+- **Drafting:** the AI can write an email, but only from facts you approved, and every claim points back to its source.
+
+AI is optional. Without API keys the app falls back to free fixed rules. The AI never sends anything: you approve every fact and every email.
 
 ## How it works
 
 ```
-import contacts → review & compliance gates → research the company (with sources)
+import contacts → review & compliance gates → AI-assisted company research (with sources)
    → score the lead → draft from approved facts → you approve the exact text
    → dry-run campaign first → careful sending → replies, bounces, opt-outs → pipeline
 ```
 
 | Research with sources | Draft built from approved facts |
 |---|---|
-| ![Research](docs/images/research.png) | ![Draft](docs/images/draft.png) |
+| ![Research](assets/research.png) | ![Draft](assets/draft.png) |
 
-![Dry run](docs/images/dry-run.png)
+![Dry run](assets/dry-run.png)
 
 *Screenshots use synthetic test data. The campaign above is a dry run: nothing was sent.*
 
 ## What it does
 
 - **Contacts:** import `.xlsx` / `.csv` with preview and column mapping; duplicates and bad addresses are handled.
-- **Research:** reads each company's own website; every finding has an exact quote and source link, and you approve it.
-- **Email studio:** drafts use only approved facts and your own profile. Approval is tied to the exact text.
+- **Research:** every finding has an exact quote and source link, and you approve it.
+- **Email studio:** approval is tied to the exact text; changing a word cancels it.
 - **Campaigns:** typed confirmation, daily and hourly caps, sending windows, pause and cancel.
 - **Replies:** reads your inbox (read-only), sorts replies, handles bounces, and honours opt-outs immediately.
 - **Pipeline and jobs:** leads, tasks and deals; background jobs that survive restarts.
@@ -47,7 +55,16 @@ docker compose up -d --build
 ```
 
 Open http://localhost:8000 and sign in with the password the script printed.
-First-day walkthrough: [docs/04-setup-and-operations.md](docs/04-setup-and-operations.md).
+
+**First day, dry run only**
+
+1. Settings → fill in your sender identity, postal address and where you found their addresses.
+2. Contacts → Import…, choose your file, check the column mapping.
+3. Pick about 10 contacts, set their country, mark them eligible, and attest that country's rule in Settings.
+4. Company research → run it, then approve the facts that are true.
+5. Email studio → generate and approve a draft. Campaigns → run a dry-run campaign.
+
+To send for real, add your mailbox (`SMTP_*`, `IMAP_*`) and any AI keys to `.env`, then flip the three switches: `LIVE_SENDING_ENABLED=true`, live mode in Settings, and provider SMTP.
 
 ## Good to know
 
@@ -55,16 +72,6 @@ First-day walkthrough: [docs/04-setup-and-operations.md](docs/04-setup-and-opera
 - "Sent" means your mail server accepted the message, not that it was delivered.
 - Cold email is restricted in many countries. The built-in country rules are a starting point, not legal advice.
 - Contact files hold personal data. `data/`, `backups/` and `.env` are git-ignored; never commit them.
-
-## Docs
-
-[Audit and research](docs/01-audit-and-research-report.md) ·
-[Architecture](docs/02-architecture-decision-record.md) ·
-[Setup and operations](docs/04-setup-and-operations.md) ·
-[Backup](docs/05-backup-and-recovery.md) ·
-[Deployment](docs/06-deployment-guide.md) ·
-[Costs](docs/07-cost-estimate.md) ·
-[Security](docs/09-security-review.md)
 
 ## Development
 

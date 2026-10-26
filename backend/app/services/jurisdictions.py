@@ -1,4 +1,4 @@
-"""Per-country outreach rules, seeded from docs/01 (checked 2026-10-26). NOT legal advice.
+"""Per-country outreach rules, checked 2026-10-26. NOT legal advice.
 
 Rule meanings
   consent_required    prior consent is needed even for B2B email -> blocked unless the contact has recorded consent

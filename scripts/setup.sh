@@ -32,5 +32,5 @@ Next:
   docker compose up -d --build
   open http://localhost:8000
 
-Live email stays OFF (LIVE_SENDING_ENABLED=false). Read docs/04-setup-and-operations.md before changing that.
+Live email stays OFF (LIVE_SENDING_ENABLED=false). Read the README before changing that.
 MSG

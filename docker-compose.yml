@@ -4,7 +4,7 @@
 #   docker compose up -d --build        start database + API/UI + worker   ->  http://localhost:8000
 #   docker compose up -d db             development: database only
 #
-# Real email can NOT be sent until you deliberately set LIVE_SENDING_ENABLED=true in .env (see docs/04).
+# Real email can NOT be sent until you deliberately set LIVE_SENDING_ENABLED=true in .env (see the README).
 x-app: &app
   build: { context: ., dockerfile: Dockerfile }
   image: neurogrid-app:local

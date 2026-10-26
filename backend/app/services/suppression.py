@@ -1,6 +1,6 @@
 """Global suppression list.
 
-Rules (see docs/02): imports can only ADD suppressions; rows are never deleted; a suppression is
+Rules: imports can only ADD suppressions; rows are never deleted; a suppression is
 only lifted by an explicit, audited, typed-confirmation action; unsubscribes / complaints / legal
 holds need an additional force flag. Adding a suppression immediately cancels queued messages and
 open follow-ups for that recipient.
