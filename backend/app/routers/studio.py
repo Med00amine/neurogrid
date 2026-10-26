@@ -165,7 +165,7 @@ class GenerateBody(BaseModel):
 def _contact_ids(db: Session, body: GenerateBody) -> list[int]:
     ids = list(body.contact_ids)
     if not ids and body.filter:
-        f = contacts_svc.ContactFilter(**{k: v for k, v in body.filter.items() if k in contacts_svc.ContactFilter.__dataclass_fields__ and k != "ids"})
+        f = contacts_svc.ContactFilter.from_dict(body.filter)
         ids = contacts_svc.resolve_ids(db, f)
     return ids
 

@@ -167,7 +167,7 @@ def _company_ids(db: Session, body: StartBody) -> tuple[list[int], int]:
     skipped = 0
     cids = list(body.contact_ids)
     if not cids and body.filter:
-        f = contacts_svc.ContactFilter(**{k: v for k, v in body.filter.items() if k in contacts_svc.ContactFilter.__dataclass_fields__ and k != "ids"})
+        f = contacts_svc.ContactFilter.from_dict(body.filter)
         cids = contacts_svc.resolve_ids(db, f)
     if cids:
         rows = db.execute(select(Contact).where(Contact.id.in_(cids))).scalars().all()

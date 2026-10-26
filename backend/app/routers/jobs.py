@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import Auth, read_access, write_access
 from app.db import get_db
 from app.jobs import queue
-from app.models import Job, JobItem
+from app.models import Job, JobItem, UsageRecord
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -53,7 +53,8 @@ def get_job(job_id: UUID, db: Session = Depends(get_db), _: Auth = Depends(read_
     if j is None:
         raise HTTPException(404, "Job not found")
     items = db.execute(select(JobItem).where(JobItem.job_id == job_id).order_by(JobItem.id).limit(300)).scalars().all()
-    return {**ser(j), "payload": j.payload, "items": [{"key": i.item_key, "status": i.status, "error": i.error} for i in items],
+    cost = db.execute(select(func.coalesce(func.sum(UsageRecord.cost_usd), 0)).where(UsageRecord.job_id == job_id)).scalar_one()
+    return {**ser(j), "cost_usd_est": float(cost), "payload": j.payload, "items": [{"key": i.item_key, "status": i.status, "error": i.error} for i in items],
             "item_counts": queue.item_counts(db, job_id)}
 
 

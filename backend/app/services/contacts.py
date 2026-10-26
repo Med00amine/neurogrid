@@ -46,6 +46,21 @@ class ContactFilter:
     segment_id: int | None = None
     ids: list[int] = field(default_factory=list)
 
+    @classmethod
+    def from_dict(cls, d: dict | None) -> "ContactFilter":
+        """Build from untrusted JSON: unknown keys are ignored and "true"/"false" strings become real booleans."""
+        d = d or {}
+        out = {}
+        for k, v in d.items():
+            if k not in cls.__dataclass_fields__ or k == "ids" or v in (None, ""):
+                continue
+            if k in ("suppressed", "researched", "role_account"):
+                v = v if isinstance(v, bool) else str(v).lower() == "true"
+            elif k in ("min_score", "import_batch_id", "segment_id"):
+                v = int(v)
+            out[k] = v
+        return cls(**out)
+
 
 def suppressed_expr():
     return or_(

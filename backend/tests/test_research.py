@@ -400,3 +400,40 @@ def test_research_job_resumes_without_repeating_finished_companies(site):
     with session_scope() as db:
         assert db.get(Job, jid).status == "completed"
         assert len(db.execute(select(ResearchRun)).scalars().all()) == 1
+
+
+# --- the contact's role --------------------------------------------------------------------------------------------
+
+
+def test_role_is_only_quoted_when_the_site_names_the_person_and_a_title():
+    from app.services.research.extract import Page
+    from app.services.research.heuristics import run_heuristics
+
+    text = "Our team\nChris Martin, Chief Executive Officer and co-founder\nDana Roe joined us in 2021 to work on cheese\nSomeone Else, CTO"
+    page = Page(url="https://x.example/team", title="Team", meta_description=None, lang=None, text=text)
+    out = run_heuristics([(1, page, "official_site")], people=["Chris Martin", "Dana Roe", "Single", ""])
+    roles = [f for f in out.findings if f.category == "contact_role"]
+    assert len(roles) == 1 and "Chris Martin" in roles[0].statement and roles[0].evidence == [(1, "Chris Martin, Chief Executive Officer and co-founder")]
+    assert roles[0].confidence == "low" and roles[0].kind == "fact"  # Dana has no title on her line; "Single" is not a full name: nothing is inferred
+    page.injection_flag = True
+    assert not [f for f in run_heuristics([(1, page, "official_site")], people=["Chris Martin"]).findings if f.category == "contact_role"]
+
+
+def test_an_approved_role_finding_feeds_the_decision_relevance_score(database_url):
+    from app.models import ResearchFinding
+    from app.services import scoring
+    from tests.research_factory import seed_research
+
+    with session_scope() as db:
+        comp = make_company(db, domain="team.example.com", name="Team Co")
+        c = make_contact(db, email="chris@team.example.com", company=comp, name="Chris Martin")
+        fs = seed_research(db, comp, [{"category": "contact_role", "quote": "Chris Martin, Chief Executive Officer",
+                                       "statement": "The website lists Chris Martin in this line: “Chris Martin, Chief Executive Officer”", "confidence": "low"}], status="pending")
+        before = scoring.compute(db, c)["components"]["decision_relevance"]
+        assert before["points"] == 4.5 and before.get("unknown")  # a pending finding changes nothing
+        fs[0].status = "approved"
+        db.flush()
+        after = scoring.compute(db, c)["components"]["decision_relevance"]
+        assert after["points"] == 15 and fs[0].id in after["finding_ids"] and "approved research finding" in after["rationale"]
+        c.role_title = "Intern"  # a title the operator typed wins over research
+        assert scoring.compute(db, c)["components"]["decision_relevance"]["points"] == 3.0

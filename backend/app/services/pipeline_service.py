@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.constants import PIPELINE_STAGES
 from app.core.events import audit, record_event
 from app.db import session_scope
-from app.jobs.worker import periodic
+from app.jobs.periodic import periodic
 from app.models import Company, Contact, Deal, LeadScore, Note, Suppression, Task
 from app.services.replies.processor import stop_followups
 

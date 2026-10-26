@@ -64,7 +64,37 @@ class ExtractionOutput:
     uncertainties: list[str]
 
 
-def run_heuristics(pages: list[tuple[int, Page, str]]) -> ExtractionOutput:
+ROLE_RE = re.compile(
+    r"\b(ceo|cto|cio|coo|cfo|chief [a-z]+ officer|co-?founder|founder|managing director|head of [a-z&/ ]{2,30}|director(?: of [a-z&/ ]{2,30})?|"
+    r"vp(?: of)? [a-z&/ ]{2,30}|vice president|engineering manager|lead (?:engineer|developer|data scientist)|principal [a-z ]{2,30}|"
+    r"partner|owner|president|geschäftsführer(?:in)?|gründer(?:in)?|directeur(?:rice)?|fondateur|fondatrice|amministratore delegato|socio)\b", re.I)
+
+
+def _name_tokens(name: str) -> list[str]:
+    return [t.casefold() for t in re.split(r"[\s,]+", name.strip()) if len(t) > 1 and t.casefold() not in {"dr", "prof", "mr", "ms", "mrs"}]
+
+
+def role_findings(pages: list[tuple[int, Page, str]], people: list[str]) -> list[FindingDraft]:
+    """Quote a line of the company's own site that names a contact AND a job title. Never infers a title."""
+    out: list[FindingDraft] = []
+    for name in dict.fromkeys(n for n in people if n):
+        toks = _name_tokens(name)
+        if len(toks) < 2:
+            continue
+        done = False
+        for sid, p, st in pages:
+            if st != "official_site" or p.injection_flag or done:
+                continue
+            for line in p.text.split("\n"):
+                low = line.casefold()
+                if 8 <= len(line) <= 240 and all(t in low for t in toks) and ROLE_RE.search(line):
+                    out.append(FindingDraft("contact_role", f"The website lists {name} in this line: \u201c{line.strip()}\u201d", "fact", "low", evidence=[(sid, line.strip())]))
+                    done = True
+                    break
+    return out
+
+
+def run_heuristics(pages: list[tuple[int, Page, str]], people: list[str] | None = None) -> ExtractionOutput:
     """pages: [(source_id, Page, source_type)] where source_type is official_site | search_result."""
     findings: list[FindingDraft] = []
     uncertainties: list[str] = []
@@ -140,6 +170,8 @@ def run_heuristics(pages: list[tuple[int, Page, str]]) -> ExtractionOutput:
             findings.append(FindingDraft("hiring_signal", "Open roles appear to include: " + "; ".join(roles[:4]), "fact", "medium",
                                          evidence=[(sid, r) for r in roles[:4]]))
             break
+
+    findings.extend(role_findings(pages, people or []))
 
     # 5. location (for jurisdiction)
     for sid, p in official:

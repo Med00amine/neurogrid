@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.events import audit
 from app.core.settings_store import get_group
 from app.db import session_scope
-from app.jobs.worker import periodic
+from app.jobs.periodic import periodic
 from app.models import InboundMessage, ResearchSource
 
 log = logging.getLogger("retention")

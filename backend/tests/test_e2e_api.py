@@ -257,3 +257,26 @@ def test_retention_purges_text_but_keeps_the_audit_trail(world):
         assert r["source_texts"] == 1
         assert db.execute(select(ResearchSource)).scalars().first().text is None
         assert db.execute(select(func.count()).select_from(OutreachEvent)).scalar_one() >= 0  # events are never purged
+
+
+def test_json_filters_treat_false_strings_as_false(world):
+    from app.services.contacts import ContactFilter
+
+    f = ContactFilter.from_dict({"researched": "false", "suppressed": "true", "role_account": False, "min_score": "40", "bogus": "x", "ids": [1], "stage": ""})
+    assert f.researched is False and f.suppressed is True and f.role_account is False and f.min_score == 40 and f.stage is None and f.ids == []
+    api, _ = world
+    up = api.post("/api/imports/upload", data={"kind": "contacts"}, files={"file": ("c.csv", CSV.encode(), "text/csv")}).json()
+    api.post("/api/imports/start", json={"file_ref": up["file_ref"], "kind": "contacts", "mapping": up["suggested_mapping"]})
+    run_jobs()
+    # "not researched" via a JSON body must select the contacts that have NOT been researched (all of them here)
+    r = api.post("/api/research/estimate", json={"filter": {"researched": "false", "eligibility": "unreviewed"}})
+    assert r.status_code == 200 and r.json()["companies"] >= 1
+    r = api.post("/api/research/estimate", json={"filter": {"researched": "true"}})
+    assert r.status_code == 200 and r.json()["companies"] == 0  # nothing has been researched yet
+
+
+def test_overview_timeseries_is_real_and_complete(world):
+    api, _ = world
+    ts = api.get("/api/overview/timeseries", params={"days": 14}).json()
+    assert len(ts["labels"]) == 14 and len(ts["series"]) == 2
+    assert all(len(s["values"]) == 14 and sum(s["values"]) == 0 for s in ts["series"])  # nothing sent or received yet: all zeros, not demo data

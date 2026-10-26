@@ -22,7 +22,7 @@ from app.config import get_settings
 from app.core.events import audit, record_event
 from app.core.settings_store import get_group
 from app.db import session_scope
-from app.jobs.worker import periodic
+from app.jobs.periodic import periodic
 from app.models import Campaign, Contact, Draft, Message, SendAttempt, Task
 from app.services import eligibility, suppression
 from app.services.sending import limits

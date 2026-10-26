@@ -237,13 +237,14 @@ def research_company(
     out: ExtractionOutput | None = None
     status = "completed"
     input_tokens = output_tokens = 0
+    people_names = [n for (n,) in db.execute(select(Contact.name).where(Contact.company_id == company_id, Contact.name.is_not(None)).limit(30)).all()]
     if pages and client is not None:
         sender = get_group(db, "sender")
         sources = [{"id": sid, "type": st, "url": p.url, "title": p.title, "text": p.text, "injection_flag": p.injection_flag} for sid, p, st in pages]
         try:
             res = llm_mod.call_llm(
                 db, client, model=lcfg.research_model, system=llm_extract.SYSTEM,
-                user=llm_extract.build_user_prompt(company.name, company.domain, sender.services, sources),
+                user=llm_extract.build_user_prompt(company.name, company.domain, sender.services, sources, people=people_names),
                 schema=llm_extract.SCHEMA, purpose="research", max_tokens=6000, effort=lcfg.effort,
                 job_id=job_id, job_spent=job_spent + cost, company_id=company_id,
             )
@@ -262,7 +263,8 @@ def research_company(
             status = "partial"
             run.mode = "heuristic"
     if pages and out is None:
-        out = heuristics.run_heuristics(pages)
+        people = [n for (n,) in db.execute(select(Contact.name).where(Contact.company_id == company_id, Contact.name.is_not(None)).limit(30)).all()]
+        out = heuristics.run_heuristics(pages, people)
     if out is None:
         out = ExtractionOutput([], "unknown", None, [])
         status = "partial" if home_res is None else status

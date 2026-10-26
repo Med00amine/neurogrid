@@ -13,38 +13,14 @@ import os
 import signal
 import socket
 import time
-from collections.abc import Callable
 
 from app.core.logging_setup import setup_logging
 from app.db import session_scope
 from app.jobs import queue, register_all_handlers
+from app.jobs.periodic import load_periodic_modules, run_periodic_once
 from app.jobs.runner import run_job
 
 log = logging.getLogger("worker")
-
-PERIODIC: list[tuple[str, float, Callable[[], None]]] = []
-_last_run: dict[str, float] = {}
-
-
-def periodic(name: str, every_seconds: float):
-    def deco(fn: Callable[[], None]):
-        PERIODIC[:] = [p for p in PERIODIC if p[0] != name]  # idempotent: re-importing a module never duplicates a task
-        PERIODIC.append((name, every_seconds, fn))
-        return fn
-
-    return deco
-
-
-def run_periodic_once(force: bool = False) -> None:
-    now = time.monotonic()
-    for name, every, fn in PERIODIC:
-        if force or now - _last_run.get(name, -1e9) >= every:
-            _last_run[name] = now
-            try:
-                fn()
-            except Exception:
-                log.exception("periodic task %s failed", name)
-
 
 class Worker:
     def __init__(self) -> None:
@@ -53,7 +29,7 @@ class Worker:
 
     def loop(self, poll_seconds: float = 2.0) -> None:
         register_all_handlers()
-        _register_periodic()
+        load_periodic_modules()
         log.info("worker %s started", self.id)
         # Recover anything a previous worker left half-way before taking new work.
         with session_scope() as db:
@@ -75,16 +51,6 @@ class Worker:
                 log.exception("worker loop error")
                 time.sleep(poll_seconds)
         log.info("worker %s stopped", self.id)
-
-
-def _register_periodic() -> None:
-    # imported here so the modules can use @periodic without import cycles
-    for mod in ("app.services.sending.engine", "app.services.replies.jobs", "app.services.pipeline_service", "app.services.retention"):
-        try:
-            __import__(mod)
-        except ModuleNotFoundError as e:
-            if e.name is None or not (mod == e.name or mod.startswith(e.name + ".")):
-                raise
 
 
 def main() -> None:

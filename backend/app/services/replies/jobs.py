@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.db import session_scope
 from app.jobs import queue
 from app.jobs.runner import JobContext, JobFailure, job_handler
-from app.jobs.worker import periodic
+from app.jobs.periodic import periodic
 from app.services import llm as llm_mod
 from app.services.replies import processor
 from app.services.replies.imap import get_mailbox

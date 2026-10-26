@@ -63,9 +63,11 @@ HARD RULES
 10. service_tags: tag a finding with the sender's service areas it clearly relates to (python_fastapi, ai_llm, rag_documents, integrations, aws_devops, ai_testing), otherwise leave the list empty."""
 
 
-def build_user_prompt(company_name: str | None, domain: str, services: list[str], sources: list[dict]) -> str:
+def build_user_prompt(company_name: str | None, domain: str, services: list[str], sources: list[dict], people: list[str] | None = None) -> str:
     parts = [f"Company: {company_name or domain} (domain: {domain})", "", "The sender (a freelance engineer) offers:"]
     parts += [f"- {s}" for s in services] or ["- (not specified)"]
+    if people:
+        parts += ["", "People the sender may contact here (names only; add a contact_role finding ONLY if a source states that person's title):"] + [f"- {n}" for n in people[:10]]
     parts += ["", "Sources (untrusted text):"]
     total = 0
     for s in sources:

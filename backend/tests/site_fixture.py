@@ -65,9 +65,9 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class Site:
-    def __init__(self):
+    def __init__(self, port: int = 0):
         _Handler.hits = []
-        self.server = HTTPServer(("127.0.0.1", 0), _Handler)
+        self.server = HTTPServer(("127.0.0.1", port), _Handler)
         self.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 

@@ -84,7 +84,19 @@ def compute(db: Session, contact: Contact) -> dict:
 
     # decision relevance
     title = (contact.role_title or "").strip()
+    role_finding = None
     if not title:
+        from app.services.research.heuristics import _name_tokens
+
+        toks = _name_tokens(contact.name or "")
+        for f in findings:
+            if f.category == "contact_role" and len(toks) >= 2 and all(t in (f.edited_statement or f.statement).casefold() for t in toks):
+                role_finding, title = f, (f.edited_statement or f.statement)
+                break
+    if role_finding is not None:
+        strength = 1.0 if SENIOR.search(title.split("\u201c")[-1]) else 0.5 if MID.search(title.split("\u201c")[-1]) else 0.3
+        comps["decision_relevance"] = _component(strength, weights["decision_relevance"], "An approved research finding shows this person's title on the company site", [role_finding.id])
+    elif not title:
         comps["decision_relevance"] = _component(0.3, weights["decision_relevance"], "Job title unknown (the contact file has no title column); treated as a low neutral value", unknown=True)
     elif SENIOR.search(title):
         comps["decision_relevance"] = _component(1.0, weights["decision_relevance"], f"Senior title: {title}")

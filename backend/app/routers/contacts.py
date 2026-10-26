@@ -84,7 +84,7 @@ class BulkBody(BaseModel):
 
 @router.post("/bulk")
 def bulk(body: BulkBody, db: Session = Depends(get_db), auth: Auth = Depends(write_access)):
-    f = svc.ContactFilter(**{k: v for k, v in body.filter.items() if k in svc.ContactFilter.__dataclass_fields__ and k != "ids"})
+    f = svc.ContactFilter.from_dict(body.filter)
     f.ids = body.ids
     if not body.ids and not any(v not in (None, "", []) for v in body.filter.values()):
         raise HTTPException(400, "Select contacts or apply at least one filter first (bulk actions never run on 'everything' by accident)")

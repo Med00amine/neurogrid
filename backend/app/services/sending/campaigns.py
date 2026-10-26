@@ -48,7 +48,7 @@ def build(db: Session, *, name: str, mode: str, actor: str, step: int = 1, conta
     if mode not in ("dry_run", "live"):
         raise CampaignError("mode must be dry_run or live")
     sending = get_group(db, "sending")
-    f = contacts_svc.ContactFilter(**{k: v for k, v in (filter or {}).items() if k in contacts_svc.ContactFilter.__dataclass_fields__ and k != "ids"})
+    f = contacts_svc.ContactFilter.from_dict(filter)
     f.segment_id = segment_id or f.segment_id
     ids = list(dict.fromkeys(contact_ids or []))
     if not ids:

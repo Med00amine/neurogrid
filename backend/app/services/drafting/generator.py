@@ -135,17 +135,23 @@ def split_into_paragraphs(body: str, old: list[dict] | None = None) -> list[dict
 # --- template mode ------------------------------------------------------------------------------------------------------
 
 
+def _quoted(prefix: str, quote: str) -> str:
+    """prefix + a verbatim quote, with exactly one full stop (the quote often ends with its own)."""
+    q = quote.strip()
+    return f"{prefix}\u201c{q}\u201d" + ("" if q[-1:] in ".!?\u2026" else ".")
+
+
 def _fact_sentence(u: Usable, company: str) -> str:
     f, q = u.finding, u.quote
     if f.status == "edited" and f.edited_statement:
         return f.edited_statement.strip().rstrip(".") + "."
     if f.category == "hiring_signal":
-        return f"I saw that {company} is hiring: “{q}”." if q else f"I saw that {company} is hiring."
+        return _quoted(f"I saw that {company} is hiring: ", q) if q else f"I saw that {company} is hiring."
     if f.category == "product_service" and u.evidence:
         topics = [e.excerpt for e in u.evidence if e.excerpt_verified][:3]
-        return f"I saw that your site covers {', '.join(topics)}." if topics else f"I read about {company}’s services on your site."
+        return f"I saw that your site covers {', '.join(topics)}." if topics else f"I read about {company}\u2019s services on your site."
     if q:
-        return f"I read on {company}’s website: “{q[:220].rstrip()}”."
+        return _quoted(f"I read on {company}\u2019s website: ", q[:220])
     return f"I read about {company} on your website."
 
 
