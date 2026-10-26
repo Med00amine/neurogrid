@@ -27,6 +27,7 @@ def env_status() -> dict:
         "llm": {"configured": bool(s.anthropic_api_key)},
         "search": {"configured": bool(s.tavily_api_key)},
         "live_sending_enabled_in_env": s.live_sending_enabled,
+        "admin_password_in_env": bool(s.admin_password),
         "public_base_url": s.public_base_url,
         "https_unsubscribe_possible": s.public_base_url.startswith("https://"),
     }

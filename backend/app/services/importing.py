@@ -151,7 +151,10 @@ def _sniff_delimiter(sample: str) -> str:
 def sheet_names(path: Path) -> list[str]:
     if path.suffix.lower() != ".xlsx":
         return []
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True, keep_links=False)
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True, keep_links=False)
+    except Exception as e:  # noqa: BLE001
+        raise ImportError_(f"The file could not be read safely ({type(e).__name__})") from e
     try:
         return list(wb.sheetnames)
     finally:
@@ -176,8 +179,18 @@ def iter_raw_rows(path: Path, sheet: str | None = None) -> Iterator[tuple[int, l
             yield i, row
 
 
+def _guarded(it: Iterator[tuple[int, list[Any]]]) -> Iterator[tuple[int, list[Any]]]:
+    """Any parser failure on a hostile or corrupt file becomes a clear, user-facing error (never a 500)."""
+    try:
+        yield from it
+    except ImportError_:
+        raise
+    except Exception as e:  # noqa: BLE001 - zip/XML/encoding errors, defusedxml refusals, corrupt workbooks
+        raise ImportError_(f"The file could not be read safely ({type(e).__name__}). Re-save it as a plain .xlsx or .csv and try again") from e
+
+
 def read_table(path: Path, sheet: str | None = None) -> tuple[list[str], Iterator[tuple[int, dict[str, Any]]]]:
-    it = iter_raw_rows(path, sheet)
+    it = _guarded(iter_raw_rows(path, sheet))
     try:
         _, header_row = next(it)
     except StopIteration:

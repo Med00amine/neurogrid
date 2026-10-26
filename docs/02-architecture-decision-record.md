@@ -38,5 +38,27 @@ merely unlikely. There is no legacy code to preserve.
 * Throughput is deliberately tiny (default 20/day). That is a feature.
 * Postgres is a single point of failure; backups are documented (docs/05).
 
-## Module layout
-`contacts · companies · research · qualification · drafting · sending · replies · pipeline · jobs · settings · metrics · audit · auth` under `backend/app/modules/`, each with `models`, `service`, `router` where relevant.
+## Module layout (as built)
+```
+backend/app/
+  models/        one file per area (auth, contacts, research, drafting, sending, replies, pipeline_jobs); Alembic migrations in backend/migrations
+  services/      contacts, importing, eligibility, jurisdictions, suppression, segments, scoring, metrics, retention, llm, seed
+                 research/ (fetcher, extract, heuristics, llm_extract, search, pipeline, jobs)    drafting/ (generator, lint, compose, service, jobs)
+                 sending/ (providers, limits, engine, campaigns)    replies/ (parse, classify, processor, imap, jobs)    pipeline_service
+  routers/       thin HTTP layer, one file per page of the UI
+  jobs/          queue (Postgres), runner, worker, periodic (task registry)
+  core/          config-adjacent: security, deps (auth/CSRF), events (append-only helpers), settings_store, pricing, text, logging_setup
+frontend/src/    pages/ (one per sidebar item), components/ (ui, charts, ContactDrawer, ImportWizard, Layout), api.ts, auth.tsx
+```
+Dependencies point one way: routers → services → models. The sender, research and reply modules never import each other; they meet in the database.
+
+## Decisions added during the build
+| # | Decision | Why |
+|---|---|---|
+| 9 | **No Redis/Celery.** Periodic work (send tick every 5 s, mailbox poll every 5 min, follow-up guard, retention) is a small registry in `jobs/periodic.py`. | Fewer moving parts. The registry is its own module because the worker starts as `python -m app.jobs.worker` (module `__main__`); a registry inside that file existed twice and silently never ran. Caught by the browser test; guarded by `tests/test_worker_process.py`. |
+| 10 | **One send = three steps with no transaction held open across the network call** (claim+`submitting`+commit → provider call → record outcome). | A crash leaves `submitting`, which recovery turns into `unknown`, never `queued`. |
+| 11 | **Evidence is verified by code, not trusted from the model.** Every quote is re-searched in the saved page text; failures are `auto_rejected` and cannot be approved. | Defeats hallucination and prompt injection reaching an email. |
+| 12 | **Approval is bound to a SHA-256 of the exact subject+body.** Any edit voids it; the engine re-checks at send time. | "The text I approved is the text that is sent." |
+| 13 | **Live sending needs 3 switches + typed confirmation**, and `ENVIRONMENT=test` makes the SMTP/IMAP clients refuse non-local hosts. | A misconfigured test or a bug cannot reach the real world. |
+| 14 | **Reply handling is read-only IMAP** (`BODY.PEEK`, `readonly=True`). | The app never changes your mailbox. |
+| 15 | **STARTTLS/SSL uses the system trust store with hostname verification; no downgrade.** | Credentials and mail are never sent in clear because a server misbehaves. |

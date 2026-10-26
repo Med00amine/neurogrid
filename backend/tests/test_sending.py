@@ -715,3 +715,83 @@ def test_smtp_reply_classification(code, text, expected):
     from app.services.sending.providers import classify_reply
 
     assert classify_reply(code, text) == expected
+
+
+def test_test_email_goes_only_to_your_own_addresses(live, database_url):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from tests.api_helpers import Api, make_user
+
+    with TestClient(create_app()) as client:
+        make_user()
+        a = Api(client)
+        a.login()
+        r = a.post("/api/sending/test-email", json={"to": "someone.else@example.com"})
+        assert r.status_code == 400 and "only be sent to your own addresses" in r.json()["detail"]
+        assert live.messages == []  # nothing went out
+        r = a.post("/api/sending/test-email", json={"to": "SENDER@sender.example.org"})
+        assert r.status_code == 200 and r.json()["ok"] and r.json()["outcome"] == "accepted"
+        assert len(live.messages) == 1 and live.messages[0]["to"] == ["sender@sender.example.org"]
+        assert "Test email" in live.messages[0]["msg"]["Subject"]
+        live.handler.mode = "data_554"
+        r = a.post("/api/sending/test-email", json={"to": "sender@sender.example.org"})
+        assert r.status_code == 200 and not r.json()["ok"] and r.json()["category"] == "policy_rejected"
+
+
+# --- TLS: the provider must verify certificates --------------------------------------------------------------------
+
+
+@pytest.fixture()
+def tls_cert(tmp_path):
+    import shutil
+    import subprocess
+
+    if not shutil.which("openssl"):
+        pytest.skip("openssl is not available to create a test certificate")
+    crt, key = tmp_path / "c.pem", tmp_path / "k.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key), "-out", str(crt), "-days", "1",
+                    "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1"], check=True, capture_output=True)
+    return str(crt), str(key)
+
+
+def _msg():
+    return OutgoingMessage("Sender <a@b.example>", "a@b.example", "c@d.example", "Subject", "Body", "<tls-test@b.example>")
+
+
+def test_starttls_server_with_an_untrusted_certificate_is_refused_and_nothing_is_sent(database_url, monkeypatch, tls_cert):
+    with Sink(tls=tls_cert) as sink:
+        monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
+        monkeypatch.setenv("SMTP_PORT", str(sink.port))
+        monkeypatch.setenv("SMTP_SECURITY", "starttls")
+        reset_settings_cache()
+        out = SMTPProvider().send(_msg())
+        assert out.kind == "pre_send_failure" and out.error_category == "network" and out.retry_safe  # certificate verification failed
+        assert "CERTIFICATE" in (out.response or "").upper() or "SSL" in (out.response or "").upper()
+        assert sink.messages == []  # not even an unencrypted attempt
+
+
+def test_starttls_delivers_when_the_certificate_is_trusted(database_url, monkeypatch, tls_cert):
+    import ssl
+
+    real = ssl.create_default_context
+    monkeypatch.setattr(ssl, "create_default_context", lambda *a, **k: real(cafile=tls_cert[0]))  # trust ONLY the test certificate
+    with Sink(tls=tls_cert) as sink:
+        monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
+        monkeypatch.setenv("SMTP_PORT", str(sink.port))
+        monkeypatch.setenv("SMTP_SECURITY", "starttls")
+        reset_settings_cache()
+        out = SMTPProvider().send(_msg())
+        assert out.kind == "accepted" and len(sink.messages) == 1
+        assert sink.messages[0]["to"] == ["c@d.example"]
+
+
+def test_plain_text_smtp_is_only_used_when_explicitly_configured(database_url, monkeypatch, tls_cert):
+    """A server that offers no TLS must be refused when STARTTLS is configured (no silent downgrade)."""
+    with Sink() as sink:  # plain server, no STARTTLS offered
+        monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
+        monkeypatch.setenv("SMTP_PORT", str(sink.port))
+        monkeypatch.setenv("SMTP_SECURITY", "starttls")
+        reset_settings_cache()
+        out = SMTPProvider().send(_msg())
+        assert out.kind != "accepted" and sink.messages == []

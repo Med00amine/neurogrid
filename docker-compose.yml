@@ -1,6 +1,39 @@
-# Development stack: only the database is started by default (`make db`).
-# The full stack (api + worker) is added in the production profile later in this file.
+# Client Acquisition Studio: full stack.
+#
+#   scripts/setup.sh        create .env with generated secrets (first time only)
+#   docker compose up -d --build        start database + API/UI + worker   ->  http://localhost:8000
+#   docker compose up -d db             development: database only
+#
+# Real email can NOT be sent until you deliberately set LIVE_SENDING_ENABLED=true in .env (see docs/04).
+x-app: &app
+  build: { context: ., dockerfile: Dockerfile }
+  image: neurogrid-app:local
+  restart: unless-stopped
+  env_file: [{ path: .env, required: false }]
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-neurogrid}:${POSTGRES_PASSWORD:-neurogrid_dev_password}@db:5432/${POSTGRES_DB:-neurogrid}
+    DATA_DIR: /data
+  volumes: [appdata:/data]
+  depends_on: { db: { condition: service_healthy } }
+
 services:
+  api:
+    <<: *app
+    command: ["api"]
+    ports:
+      # localhost only by default. For a public deployment use docker-compose.prod.yml (HTTPS reverse proxy).
+      - "127.0.0.1:${HOST_PORT:-8000}:8000"
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/worker.alive') < 90 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -31,3 +64,4 @@ services:
 
 volumes:
   pgdata:
+  appdata:

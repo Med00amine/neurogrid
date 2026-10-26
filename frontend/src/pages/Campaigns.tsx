@@ -120,7 +120,7 @@ function CampaignPanel({ id, onClose, admin }: { id: number; onClose: () => void
               </div>)}
 
             <Tabs value={tab} onChange={setTab} tabs={[{ id: "recipients", label: "Recipients" }, { id: "queue", label: `Queue (${Object.values(c.message_counts).reduce((a: number, b: any) => a + b, 0)})` }, { id: "settings", label: "Limits & sender" }]} />
-            {tab === "recipients" && <Recipients id={id} />}
+            {tab === "recipients" && <Recipients id={id} initial={c.recipient_counts.excluded > 0 ? "excluded" : "included"} />}
             {tab === "queue" && <Queue id={id} admin={admin} counts={c.message_counts} />}
             {tab === "settings" && (
               <dl className="kv">
@@ -151,8 +151,8 @@ function ConfirmCampaign({ c, onClose, onDone }: { c: any; onClose: () => void; 
   );
 }
 
-function Recipients({ id }: { id: number }) {
-  const [status, setStatus] = useState<"included" | "excluded">("excluded");
+function Recipients({ id, initial }: { id: number; initial: "included" | "excluded" }) {
+  const [status, setStatus] = useState<"included" | "excluded">(initial);
   const [page, setPage] = useState(1);
   const q = useQuery({ queryKey: ["campaign-recipients", id, status, page], queryFn: () => get(`/api/campaigns/${id}/recipients${qs({ status, page, page_size: 25 })}`), placeholderData: (x) => x });
   const openContact = useOpenContact();

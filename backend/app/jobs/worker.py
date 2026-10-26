@@ -21,6 +21,7 @@ from app.jobs.periodic import load_periodic_modules, run_periodic_once
 from app.jobs.runner import run_job
 
 log = logging.getLogger("worker")
+ALIVE_FILE = "/tmp/worker.alive"  # touched every loop; the container healthcheck reads its age
 
 class Worker:
     def __init__(self) -> None:
@@ -36,6 +37,8 @@ class Worker:
             queue.reap_stale(db, stale_seconds=0 if os.environ.get("WORKER_REAP_ALL_ON_START") == "1" else queue.STALE_AFTER_SECONDS)
         while not self.stop:
             try:
+                with open(ALIVE_FILE, "a"):
+                    os.utime(ALIVE_FILE, None)
                 with session_scope() as db:
                     queue.reap_stale(db)
                 run_periodic_once()

@@ -62,7 +62,7 @@ class SinkHandler:
 
 
 class Sink:
-    def __init__(self, auth: tuple[str, str] | None = None):
+    def __init__(self, auth: tuple[str, str] | None = None, tls: tuple[str, str] | None = None):
         self.handler = SinkHandler()
         self.port = free_port()
         kwargs = {}
@@ -72,6 +72,12 @@ class Sink:
                 return AuthResult(success=ok, handled=ok)  # handled=False makes aiosmtpd send the 535 itself
 
             kwargs = dict(authenticator=authenticator, auth_required=True, auth_require_tls=False)
+        if tls:  # (certfile, keyfile): offer STARTTLS and require it
+            import ssl
+
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(tls[0], tls[1])
+            kwargs.update(tls_context=ctx, require_starttls=True)
         self.controller = Controller(self.handler, hostname="127.0.0.1", port=self.port, **kwargs)
 
     @property

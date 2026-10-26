@@ -267,3 +267,48 @@ def test_real_contact_file_imports_safely(uploads):
     # importing the identical file again changes nothing
     _, again = run_import(REAL_FILE, options={"extra_columns": ["data_quality_issue"]}, provenance="second run of identical file")
     assert again["inserted"] == 0 and again["duplicate_existing"] == 21860
+
+
+def test_hostile_spreadsheets_are_refused_with_a_clear_message(uploads, monkeypatch):
+    import io
+    import zipfile
+
+    # 1. zip bomb: a tiny file that expands enormously
+    monkeypatch.setattr(importing, "MAX_UNCOMPRESSED_BYTES", 1_000_000)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("xl/workbook.xml", "<workbook/>")
+        z.writestr("xl/worksheets/sheet1.xml", b"0" * 5_000_000)
+    assert len(buf.getvalue()) < 100_000
+    with pytest.raises(importing.ImportError_, match="zip bomb"):
+        importing.save_upload(buf.getvalue(), "bomb.xlsx")
+
+    # 2. XML entity expansion ("billion laughs") inside a workbook must not be expanded
+    wb = openpyxl.Workbook()
+    wb.active.append(["email"])
+    wb.active.append(["a@b.example.com"])
+    good = io.BytesIO()
+    wb.save(good)
+    src = zipfile.ZipFile(io.BytesIO(good.getvalue()))
+    evil = io.BytesIO()
+    doctype = ('<!DOCTYPE s [<!ENTITY a "AAAAAAAAAA"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">'
+               '<!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">]>')
+
+    def poisoned(name: str, data: bytes) -> bytes:
+        if name != "xl/worksheets/sheet1.xml":
+            return data
+        text = data.decode()
+        cut = text.index("?>") + 2 if text.startswith("<?xml") else 0
+        return (text[:cut] + doctype + text[cut:]).encode()
+
+    with zipfile.ZipFile(evil, "w", zipfile.ZIP_DEFLATED) as z:
+        for n in src.namelist():
+            z.writestr(n, poisoned(n, src.read(n)))
+    monkeypatch.setattr(importing, "MAX_UNCOMPRESSED_BYTES", 500 * 1024 * 1024)
+    stored, _ = importing.save_upload(evil.getvalue(), "evil.xlsx")
+    with pytest.raises(importing.ImportError_, match="could not be read safely"):
+        importing.preview(stored, "contacts")
+    # 3. a corrupt CSV/XLSX never produces a stack trace
+    (uploads / "junk.xlsx").write_bytes(b"PK\x03\x04 not really")
+    with pytest.raises(importing.ImportError_):
+        importing.save_upload((uploads / "junk.xlsx").read_bytes(), "junk.xlsx")

@@ -184,3 +184,17 @@ def test_upload_rejects_bad_files_and_path_traversal(api):
     assert r.status_code == 400
     r = api.post("/api/imports/start", json={"file_ref": "../../etc/passwd", "kind": "contacts", "mapping": {"email": "email"}})
     assert r.status_code == 404
+
+
+def test_settings_warns_while_the_bootstrap_admin_password_is_still_in_the_environment(database_url, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "a-long-bootstrap-password-1")
+    reset_settings_cache()
+    from app.main import create_app
+
+    with TestClient(create_app()) as client:
+        make_user()
+        a = Api(client)
+        a.login()
+        data = a.get("/api/settings").json()
+        assert data["env"]["admin_password_in_env"] is True
+        assert "a-long-bootstrap-password-1" not in a.get("/api/settings").text

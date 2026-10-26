@@ -1,0 +1,23 @@
+# Public deployment with automatic HTTPS (Caddy + Let's Encrypt).
+#   DOMAIN=studio.example.com docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Requirements: a domain whose A record points at this server, ports 80 and 443 open.
+# In .env set PUBLIC_BASE_URL=https://studio.example.com and COOKIE_SECURE=true.
+services:
+  api:
+    ports: !reset []              # the API is no longer reachable from outside; only Caddy talks to it
+    environment:
+      FORWARDED_ALLOW_IPS: "*"    # safe here: nothing but the proxy can reach this container
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN to your domain name}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+volumes:
+  caddy_data:
+  caddy_config:

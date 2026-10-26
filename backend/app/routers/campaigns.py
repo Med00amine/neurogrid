@@ -208,6 +208,38 @@ def sending_status(db: Session = Depends(get_db), _: Auth = Depends(read_access)
     }
 
 
+class TestEmailBody(BaseModel):
+    to: str = Field(max_length=320)
+
+
+@router.post("/sending/test-email")
+def test_email(body: TestEmailBody, db: Session = Depends(get_db), auth: Auth = Depends(write_access)):
+    """Send ONE plain test message to one of YOUR OWN addresses to prove the mailbox works. It can never go to anyone else."""
+    from app.core.events import audit
+    from app.core.text import normalize_email
+    from app.services.drafting import compose
+    from app.services.sending.providers import OutgoingMessage
+
+    env = get_settings()
+    if not env.smtp_host:
+        raise HTTPException(409, "SMTP is not configured in .env")
+    sender = get_group(db, "sender")
+    own = {a.strip().lower() for a in (sender.from_email, sender.reply_to, env.smtp_from_email, env.smtp_username, env.imap_username) if a and "@" in a}
+    to = normalize_email(body.to)
+    if not to or to not in own:
+        raise HTTPException(400, "Test emails can only be sent to your own addresses: " + (", ".join(sorted(own)) or "(set your From address first)"))
+    from_email = compose.sender_from_email(sender, env)
+    name = sender.display_name.replace('"', "").strip()
+    msg = OutgoingMessage(from_header=f'"{name}" <{from_email}>' if name else from_email, from_email=from_email, to_email=to,
+                          subject="Test email from Client Acquisition Studio", rfc_message_id=f"<test-{__import__('uuid').uuid4().hex}@{from_email.rsplit('@', 1)[-1]}>",
+                          body="This is a test message sent from your own Client Acquisition Studio.\n\nIf you can read it, your SMTP settings work. "
+                               "Check that it arrived in your inbox (not spam) and look at the message source to confirm SPF and DKIM show 'pass'.\n")
+    out = SMTPProvider(env).send(msg)
+    audit(db, "sending.test_email", actor=auth.label, details={"to": to, "outcome": out.kind})
+    return {"ok": out.kind == "accepted", "outcome": out.kind, "stage": out.stage, "response": (out.response or "")[:300], "category": out.error_category,
+            "note": "Accepted means your mail server took it. Check your inbox and spam folder." if out.kind == "accepted" else "It was NOT accepted. See the response above."}
+
+
 @router.post("/sending/test-smtp")
 def test_smtp(auth: Auth = Depends(write_access)):
     """Connects and logs in, then disconnects. Sends nothing."""

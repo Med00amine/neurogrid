@@ -8,6 +8,7 @@ pydantic==2.14.1
 pydantic-settings==2.16.1
 httpx==0.28.1
 openpyxl==3.1.5
+defusedxml==0.7.1  # makes openpyxl refuse XML entity bombs in hostile spreadsheets
 argon2-cffi==25.1.0
 beautifulsoup4==4.15.0
 lxml==6.1.3

@@ -374,10 +374,13 @@ function Connections({ s }: { s: any }) {
   const toast = useToast();
   const e = s.env;
   const smtp = useMutation({ mutationFn: () => post("/api/sending/test-smtp", {}), onSuccess: (r: any) => (r.ok ? toast.ok("SMTP login works. Nothing was sent.") : toast.error(r.error)), onError: (x: any) => toast.error(x.message) });
+  const [testTo, setTestTo] = useState(s.groups.sender.from_email || e.smtp.from_email || "");
+  const testMail = useMutation({ mutationFn: () => post("/api/sending/test-email", { to: testTo }), onSuccess: (r: any) => (r.ok ? toast.ok(r.note) : toast.error(`${r.note} ${r.response}`)), onError: (x: any) => toast.error(x.message) });
   const imap = useMutation({ mutationFn: () => post("/api/replies/test-imap", {}), onSuccess: (r: any) => (r.ok ? toast.ok(`IMAP works (${r.messages_in_mailbox} messages in the mailbox)`) : toast.error(r.error)), onError: (x: any) => toast.error(x.message) });
   const row = (name: string, ok: boolean, detail?: ReactNode) => <tr key={name}><td className="mono">{name}</td><td>{ok ? <Badge tone="ok"><Icon name="check" size={12} />configured</Badge> : <Badge tone="warn"><Icon name="alert" size={12} />missing</Badge>}</td><td className="small">{detail}</td></tr>;
   return (
     <div className="col gap-16">
+      {e.admin_password_in_env && <Banner tone="warn" title="Remove ADMIN_PASSWORD from .env">The first admin password is still stored in plain text in the server's <code>.env</code>. It is only needed on the very first start. Delete that line (and restart) so it is not left lying around. To change your password later use <code>python -m app.cli set-password</code>.</Banner>}
       <Banner tone="info" title="Secrets are never shown here">Passwords and API keys live only in the server's <code>.env</code> file. This page can tell you whether each one is set, not what it is. To change one, edit <code>.env</code> and restart the containers.</Banner>
       <Card title="Credentials & connections" pad={false}>
         <div className="table-wrap"><table className="t"><thead><tr><th>Setting</th><th>Status</th><th>Notes</th></tr></thead><tbody>
@@ -391,6 +394,11 @@ function Connections({ s }: { s: any }) {
         </tbody></table></div>
       </Card>
       {admin && <div className="row"><button className="btn" disabled={!e.smtp.host || smtp.isPending} onClick={() => smtp.mutate()}>Test SMTP login</button><button className="btn" disabled={!e.imap.host || imap.isPending} onClick={() => imap.mutate()}>Test IMAP login</button></div>}
+      {admin && e.smtp.configured && (
+        <Card title="Send a test email to yourself" subtitle="Proves your mailbox settings work. It can only go to your own addresses, never to a contact.">
+          <div className="row wrap"><input className="input grow" type="email" aria-label="Your own address" value={testTo} onChange={(ev) => setTestTo(ev.target.value)} /><button className="btn primary" disabled={!testTo || testMail.isPending} onClick={() => testMail.mutate()}>Send test email</button></div>
+          <p className="xs muted mt-8">Then open it in your inbox: check it is not in spam, and use “show original” to confirm SPF and DKIM say PASS.</p>
+        </Card>)}
       <p className="xs muted">Environment: {e.environment}.</p>
     </div>
   );
