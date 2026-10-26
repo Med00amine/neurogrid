@@ -78,7 +78,7 @@ def _jurisdiction_reasons(db: Session, contact: Contact) -> list[Reason]:
     return [Reason("jurisdiction_unknown", f"{label}: outreach rules not assessed and no consent recorded")]
 
 
-def evaluate_contact(db: Session, contact: Contact, *, step: int = 1, now: datetime | None = None) -> Decision:
+def evaluate_contact(db: Session, contact: Contact, *, step: int = 1, now: datetime | None = None, ignore_message_id: int | None = None) -> Decision:
     now = now or datetime.now(timezone.utc)
     reasons: list[Reason] = []
 
@@ -94,12 +94,11 @@ def evaluate_contact(db: Session, contact: Contact, *, step: int = 1, now: datet
     if contact.pipeline_stage in CONVERSATION_STAGES:
         reasons.append(Reason("in_conversation", f"Contact has already replied (stage '{contact.pipeline_stage}')"))
 
-    existing = db.execute(
-        select(Message)
-        .where(Message.contact_id == contact.id, Message.sequence_step == step, Message.is_dry_run.is_(False),
-               Message.status.notin_(MESSAGE_NON_BLOCKING_STATUSES))
-        .limit(1)
-    ).scalar_one_or_none()
+    existing_q = select(Message).where(Message.contact_id == contact.id, Message.sequence_step == step, Message.is_dry_run.is_(False),
+                                       Message.status.notin_(MESSAGE_NON_BLOCKING_STATUSES))
+    if ignore_message_id is not None:
+        existing_q = existing_q.where(Message.id != ignore_message_id)  # the message we are about to send is not a duplicate of itself
+    existing = db.execute(existing_q.limit(1)).scalar_one_or_none()
     if existing is not None:
         reasons.append(Reason("already_messaged", f"A live message for step {step} already exists (status {existing.status})"))
 
@@ -157,6 +156,6 @@ def sender_readiness(db: Session, env: Settings, *, live: bool) -> list[Reason]:
             problems.append(Reason("setting_live_off", "Live mode is switched off in Settings → Sending"))
         if sending.provider != "smtp":
             problems.append(Reason("provider_not_smtp", "The sending provider is 'dry_run'; choose SMTP in Settings"))
-        if not (env.smtp_host and env.smtp_password and (env.smtp_username or from_email)):
-            problems.append(Reason("smtp_not_configured", "SMTP_HOST / SMTP_PASSWORD are not configured"))
+        if not env.smtp_host or (env.smtp_username and not env.smtp_password):
+            problems.append(Reason("smtp_not_configured", "SMTP_HOST (and SMTP_PASSWORD when SMTP_USERNAME is set) are not configured in .env"))
     return problems

@@ -21,7 +21,7 @@ def env_status() -> dict:
     return {
         "environment": s.environment,
         "secrets": s.secret_status(),
-        "smtp": {"configured": bool(s.smtp_host and s.smtp_password), "host": s.smtp_host, "port": s.smtp_port,
+        "smtp": {"configured": bool(s.smtp_host and (not s.smtp_username or s.smtp_password)), "host": s.smtp_host, "port": s.smtp_port,
                  "security": s.smtp_security, "from_email": s.smtp_from_email},
         "imap": {"configured": bool(s.imap_host and s.imap_password), "host": s.imap_host, "port": s.imap_port, "mailbox": s.imap_mailbox},
         "llm": {"configured": bool(s.anthropic_api_key)},

@@ -158,7 +158,7 @@ def _estimate(db: Session, n: int) -> dict:
 
 
 @router.post("/research/estimate")
-def estimate(body: StartBody, db: Session = Depends(get_db), _: Auth = Depends(read_access)):
+def estimate(body: StartBody, db: Session = Depends(get_db), _: Auth = Depends(write_access)):
     return _estimate(db, len(_company_ids(db, body)[0]))
 
 

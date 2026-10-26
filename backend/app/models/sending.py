@@ -50,6 +50,8 @@ class Campaign(Base):
     sender_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     notes: Mapped[str | None] = mapped_column(Text)
     paused_reason: Mapped[str | None] = mapped_column(Text)
+    backoff_until: Mapped[opt_ts]
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
     created_by: Mapped[str | None] = mapped_column(String(320))
     created_at: Mapped[created_ts]
     confirmed_by: Mapped[str | None] = mapped_column(String(320))

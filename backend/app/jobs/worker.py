@@ -28,6 +28,7 @@ _last_run: dict[str, float] = {}
 
 def periodic(name: str, every_seconds: float):
     def deco(fn: Callable[[], None]):
+        PERIODIC[:] = [p for p in PERIODIC if p[0] != name]  # idempotent: re-importing a module never duplicates a task
         PERIODIC.append((name, every_seconds, fn))
         return fn
 
@@ -77,7 +78,6 @@ class Worker:
 
 
 def _register_periodic() -> None:
-    PERIODIC.clear()
     # imported here so the modules can use @periodic without import cycles
     for mod in ("app.services.sending.engine", "app.services.replies.jobs", "app.services.pipeline_service"):
         try:
